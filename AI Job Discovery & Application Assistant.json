@@ -1,0 +1,789 @@
+{
+  "name": "AI Job Discovery & Application Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Job Search Request",
+        "formDescription": "Enter search criteria to discover jobs",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Job Title / Keyword",
+              "placeholder": "Python Developer"
+            },
+            {
+              "fieldLabel": "Location",
+              "placeholder": "Remote"
+            },
+            {
+              "fieldLabel": "Minimum Score",
+              "placeholder": "70"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44945156-24a4-4385-b132-4890c84a0e57",
+      "name": "Job Search Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        112
+      ],
+      "webhookId": "677472b1-2937-429c-9c6e-fe0803f9e35b"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst role = input['Job Title / Keyword'] || 'Python Developer';\nconst minScore = parseInt(input['Minimum Score']) || 70;\n\nreturn {\n  json: {\n    role: role.trim(),\n    minScore: minScore,\n    isValid: role.trim().length > 0\n  }\n};"
+      },
+      "id": "e08e9104-63e3-4552-8c65-ba5871a92668",
+      "name": "Parse & Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isValid }}",
+              "value2": true
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "41ec81bf-399a-428b-b353-a69ae5d3cdee",
+      "name": "Input Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        400,
+        144
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "94fdfa05-a82b-40a6-9e6e-3e5f2c97735b",
+      "name": "Stop - Invalid Input",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const role = $json.role;\nreturn { json: { searchUrl: `https://remoteok.com/api?tag=${encodeURIComponent(role.toLowerCase())}`, role, minScore: $json.minScore } };"
+      },
+      "id": "3e934c27-7098-4cb2-bb3c-8bea5e5d4876",
+      "name": "Build Search Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.searchUrl }}",
+        "options": {}
+      },
+      "id": "7c54cc71-7b10-4ce3-9670-0ee1f5ff7fbf",
+      "name": "Fetch Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst rawJobs = items[0].json;\nconst cleanList = Array.isArray(rawJobs) ? rawJobs.slice(1) : [];\nreturn cleanList.map(j => ({ json: { id: j.id || j.slug || j.url, title: j.position || 'N/A', company: j.company || 'N/A', location: j.location || 'Remote', tags: j.tags ? j.tags.join(', ') : '', url: j.url || '', description: j.description ? j.description.replace(/<[^>]*>?/gm, '').slice(0, 800) : '' } }));"
+      },
+      "id": "e63c3f1c-1ebc-4b12-8107-3090b8d36bb7",
+      "name": "Normalize Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (!items.length || !items[0].json) return [];\n\nlet rawData = items[0].json;\n// Handle agar data array ho ya object ke andar array ho\nconst cleanList = Array.isArray(rawData) ? rawData : (rawData.jobs || []);\n\nreturn cleanList.map(j => ({\n  json: {\n    id: j.id || j.slug || j.url || Math.random().toString(),\n    title: j.position || j.title || 'N/A',\n    company: j.company || 'N/A',\n    location: j.location || 'Remote',\n    tags: Array.isArray(j.tags) ? j.tags.join(', ') : (j.tags || ''),\n    url: j.url || '',\n    description: j.description ? j.description.replace(/<[^>]*>?/gm, '').slice(0, 800) : ''\n  }\n}));"
+      },
+      "id": "05ad031c-6deb-494c-a95a-2dc9685e68a0",
+      "name": "Dedupe & Hard Filters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $input.all().length }}",
+              "operation": "greater",
+              "value2": 0
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "6edb8e52-962d-4c7d-8d38-b0e85ea024d3",
+      "name": "Any Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tracked_Jobs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "c8eaced2-4b36-4187-a860-613cdda30cdb",
+      "name": "Read Existing Jobs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1600,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nKgDNarLSLlUMlTO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const incomingJobs = $('Dedupe & Hard Filters').all().map(i => i.json);\nconst trackedJobs = $input.all().map(i => i.json.URL || i.json.ID);\nconst trackedSet = new Set(trackedJobs.filter(Boolean));\nconst newJobs = incomingJobs.filter(j => !trackedSet.has(j.url) && !trackedSet.has(j.id));\nreturn newJobs.map(j => ({ json: j }));"
+      },
+      "id": "a20d26a8-018d-49ea-8cce-c55e4f518617",
+      "name": "Remove Already Tracked",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $input.all().length }}",
+              "operation": "greater",
+              "value2": 0
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "5d71ad51-f406-4fa5-9c13-a40ee3a5de70",
+      "name": "Any New Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "user@example.com",
+        "subject": "AI Job Discovery: No New Jobs Found",
+        "message": "No new matching job opportunities were found in this run.",
+        "options": {}
+      },
+      "id": "fd793a21-1472-40d6-8523-1df6e5be4ab1",
+      "name": "Notify No Results",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2064,
+        448
+      ],
+      "webhookId": "99592518-ff46-437c-9e22-57a56efb388c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "kaIqy0mxFPAbrZM5",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a9cfe6f1-c5e9-4155-a13a-5afefff61cb6",
+      "name": "Loop Over Jobs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2224,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $input.first().json;\nreturn { json: { digestText: `Job Discovered: ${job.title} at ${job.company} (${job.location})\\nURL: ${job.url}` } };"
+      },
+      "id": "eee972ad-58bf-48b9-8167-3183d3613e98",
+      "name": "Build Review Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "user@example.com",
+        "subject": "AI Job Review Digest",
+        "message": "={{ $json.digestText }}",
+        "options": {}
+      },
+      "id": "d2b97ad0-e2db-42e0-bd8a-8e0539d473af",
+      "name": "Send Review Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2688,
+        -112
+      ],
+      "webhookId": "225ef5b6-eff9-43f5-9bc1-5f82b1277f7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "kaIqy0mxFPAbrZM5",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $input.first().json;\nconst prompt = `Evaluate job match:\\nTitle: ${job.title}\\nCompany: ${job.company}\\nTags: ${job.tags}\\nDesc: ${job.description}\\n\\nCandidate Profile: Python, Django, REST API, n8n, React.\\nRespond in JSON:\\n{\\n  \"match_score\": 85,\\n  \"reasoning\": \"Good fit for backend & automation\"\n}`;\nreturn { json: { ...job, aiPrompt: prompt } };"
+      },
+      "id": "99b1aac6-9797-4934-aeac-fb4d96bd3e6e",
+      "name": "Build AI Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3\",\n  \"prompt\": {{ JSON.stringify($json.aiPrompt) }},\n  \"stream\": false\n}",
+        "options": {}
+      },
+      "id": "37d9cd8f-e37a-4cd4-bcb1-eea2db555054",
+      "name": "AI Match & Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2624,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $('Build AI Request').first().json;\nconst response = $input.first().json;\nlet parsed = {};\nlet isValid = false;\ntry {\n  const rawText = response.response || response.text || '';\n  const cleanJsonMatch = rawText.match(/\\{[\\s\\S]*\\}/);\n  if (cleanJsonMatch) {\n    parsed = JSON.parse(cleanJsonMatch[0]);\n    isValid = typeof parsed.match_score === 'number';\n  }\n} catch (e) { isValid = false; }\nreturn { json: { ...job, aiResponse: parsed, matchScore: parsed.match_score || 0, reasoning: parsed.reasoning || 'Parse error', aiOutputValid: isValid } };"
+      },
+      "id": "cb0c1847-bf03-4149-80e1-fc21c9bc5f50",
+      "name": "Validate AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2832,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.aiOutputValid }}",
+              "value2": true
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "dddaa472-fb7d-4981-a23f-8af87e0892ea",
+      "name": "AI Output Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3024,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.matchScore }}",
+              "operation": "largerEqual",
+              "value2": 70
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "58a615a1-8e40-4d1a-b13d-e46e60664767",
+      "name": "Meets Minimum Score?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3232,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn { json: { ...item, status: 'Shortlisted' } };"
+      },
+      "id": "174f5a3d-651c-4820-ba72-2925c9032bab",
+      "name": "Mark Shortlisted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn { json: { ...item, status: 'Below Threshold' } };"
+      },
+      "id": "90ec33c4-d7e5-4e8a-81c5-70451773a8a4",
+      "name": "Mark Below Threshold",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn { json: { ...item, status: 'AI Error' } };"
+      },
+      "id": "3d1bc465-0281-4732-b102-6009f9de0c28",
+      "name": "Mark AI Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn { json: { ID: item.id, RoleTitle: item.title, Company: item.company, Location: item.location, URL: item.url, MatchScore: item.matchScore, Status: item.status, Reasoning: item.reasoning } };"
+      },
+      "id": "6723dde0-df37-4ffb-a43a-f7adcb1d2f66",
+      "name": "Prepare Tracker Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3648,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tracked_Jobs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "e32865f4-9d6d-4d59-8ae4-63b4867ae838",
+      "name": "Save to Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3840,
+        144
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nKgDNarLSLlUMlTO",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Job Search Form": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Build Search Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop - Invalid Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Jobs": {
+      "main": [
+        [
+          {
+            "node": "Dedupe & Hard Filters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe & Hard Filters": {
+      "main": [
+        [
+          {
+            "node": "Any Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Remove Already Tracked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Already Tracked": {
+      "main": [
+        [
+          {
+            "node": "Any New Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any New Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify No Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Jobs": {
+      "main": [
+        [
+          {
+            "node": "Build Review Digest",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build AI Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Review Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Request": {
+      "main": [
+        [
+          {
+            "node": "AI Match & Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Match & Score": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "AI Output Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Output Valid?": {
+      "main": [
+        [
+          {
+            "node": "Meets Minimum Score?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark AI Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meets Minimum Score?": {
+      "main": [
+        [
+          {
+            "node": "Mark Shortlisted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Below Threshold",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Shortlisted": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tracker Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Below Threshold": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tracker Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark AI Error": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tracker Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tracker Row": {
+      "main": [
+        [
+          {
+            "node": "Save to Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "25848721-4b07-4e0c-aab0-71eacdddabd2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9b6d553ba0b1f2d80f8d61968c0de8e067456c5823865c7afc70c331482e437b"
+  },
+  "nodeGroups": [],
+  "id": "0TU6FosSnR68UbUu",
+  "tags": []
+}
